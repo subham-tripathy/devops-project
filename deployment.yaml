@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: failure-detect-deployment
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: failure-detect
+  template:
+    metadata:
+      labels:
+        app: failure-detect
+    spec:
+      containers:
+      - name: web-app
+        image: failure-detect-app:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 3000
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
