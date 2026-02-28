@@ -1,0 +1,9 @@
+{
+  "features": {
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "installHelm": false,
+      "installKubectl": true,
+      "installMinikube": false
+    }
+  }
+}

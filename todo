@@ -1,0 +1,2 @@
+- add grafana, loki, prometheus (refer to piyush's video)
+- find a way to dynamically increase and decrease the no. of pods on load or killed pods

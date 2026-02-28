@@ -1,0 +1,7 @@
+docker build -t failure-detect-app .
+kind create cluster --name failure-detect-cluster
+kind load docker-image failure-detect-app --name failure-detect-cluster
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+kubectl get pods
+kubectl port-forward service/failure-detect-service 8080:80

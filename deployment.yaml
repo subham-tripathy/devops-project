@@ -13,14 +13,14 @@ spec:
         app: failure-detect
     spec:
       containers:
-      - name: web-app
-        image: failure-detect-app:latest
-        imagePullPolicy: Never
-        ports:
-        - containerPort: 3000
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 5
+        - name: web-app
+          image: failure-detect-app:latest
+          imagePullPolicy: Never
+          ports:
+          - containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
