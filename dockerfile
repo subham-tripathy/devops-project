@@ -1,14 +1,15 @@
-FROM node
+FROM node:20-alpine
 
 WORKDIR /app
 
 COPY package.json .
 COPY package-lock.json .
 
-RUN npm install
-
-EXPOSE 6969
+RUN npm install --production
 
 COPY index.js .
+COPY index.html .
 
-CMD ["node", "."]
+EXPOSE 3000
+
+CMD ["node", "index.js"]

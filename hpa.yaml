@@ -1,0 +1,49 @@
+# Horizontal Pod Autoscaler
+# Automatically scales pods between 2–10 based on CPU usage.
+# Requires: metrics-server to be running in the cluster.
+#
+# Install metrics-server on kind:
+#   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#   kubectl patch deployment metrics-server -n kube-system \
+#     --type=json \
+#     -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+#
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: failure-detect-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: failure-detect-deployment
+  minReplicas: 10    # never go below 10 (high availability)
+  maxReplicas: 20   # never exceed 20
+  metrics:
+    # Scale up when average CPU > 20% of the requested 100m
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 20
+    # Also scale on memory pressure
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 30
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30   # react to load spikes quickly
+      policies:
+        - type: Pods
+          value: 3          # add up to 3 pods at a time
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 120  # wait 2 min before scaling down
+      policies:
+        - type: Pods
+          value: 1          # remove 1 pod at a time (gentle)
+          periodSeconds: 60

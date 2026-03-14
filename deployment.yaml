@@ -2,8 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: failure-detect-deployment
+  labels:
+    app: failure-detect
 spec:
-  replicas: 5
+  replicas: 2          # HPA will take over once applied
   selector:
     matchLabels:
       app: failure-detect
@@ -11,16 +13,36 @@ spec:
     metadata:
       labels:
         app: failure-detect
+      annotations:
+        # Prometheus auto-discovery: scrape /metrics on port 3000
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "3000"
     spec:
       containers:
         - name: web-app
           image: failure-detect-app:latest
           imagePullPolicy: Never
           ports:
-          - containerPort: 3000
+            - containerPort: 3000
+          # Resource requests are REQUIRED for HPA (CPU-based autoscaling)
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
           livenessProbe:
             httpGet:
               path: /health
               port: 3000
             initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 3
             periodSeconds: 5

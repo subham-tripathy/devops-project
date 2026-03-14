@@ -1,0 +1,184 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Grafana — dashboards for Prometheus metrics + Loki logs
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Auto-provision datasources so you don't need to click through the UI
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus-service:9090
+        access: proxy
+        isDefault: true
+        editable: true
+
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-service:3100
+        access: proxy
+        editable: true
+---
+# Auto-provision a pre-built dashboard for the app
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: default
+        folder: failure-detect
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards
+---
+# Pre-built dashboard JSON
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-app
+  namespace: monitoring
+data:
+  app-dashboard.json: |
+    {
+      "title": "Failure Detect App",
+      "uid": "failure-detect-app",
+      "schemaVersion": 37,
+      "refresh": "10s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "HTTP Requests / second",
+          "type": "timeseries",
+          "gridPos": {"x":0,"y":0,"w":12,"h":8},
+          "targets": [{
+            "datasource": {"type":"prometheus","uid":"prometheus"},
+            "expr": "sum(rate(http_requests_total[1m])) by (route)",
+            "legendFormat": "{{route}}"
+          }]
+        },
+        {
+          "id": 2,
+          "title": "Request Duration (p95)",
+          "type": "timeseries",
+          "gridPos": {"x":12,"y":0,"w":12,"h":8},
+          "targets": [{
+            "datasource": {"type":"prometheus","uid":"prometheus"},
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, route))",
+            "legendFormat": "p95 {{route}}"
+          }]
+        },
+        {
+          "id": 3,
+          "title": "Running Pods",
+          "type": "stat",
+          "gridPos": {"x":0,"y":8,"w":6,"h":4},
+          "targets": [{
+            "datasource": {"type":"prometheus","uid":"prometheus"},
+            "expr": "count(kube_pod_status_phase{namespace='default',phase='Running'}) or count(up{kubernetes_pod_name=~'failure-detect.*'})"
+          }]
+        },
+        {
+          "id": 4,
+          "title": "Crash Events",
+          "type": "stat",
+          "gridPos": {"x":6,"y":8,"w":6,"h":4},
+          "targets": [{
+            "datasource": {"type":"prometheus","uid":"prometheus"},
+            "expr": "sum(increase(app_crash_total[1h]))",
+            "legendFormat": "crashes (1h)"
+          }]
+        },
+        {
+          "id": 5,
+          "title": "CPU Usage per Pod",
+          "type": "timeseries",
+          "gridPos": {"x":12,"y":8,"w":12,"h":8},
+          "targets": [{
+            "datasource": {"type":"prometheus","uid":"prometheus"},
+            "expr": "rate(process_cpu_seconds_total{kubernetes_pod_name=~'failure-detect.*'}[1m])",
+            "legendFormat": "{{kubernetes_pod_name}}"
+          }]
+        },
+        {
+          "id": 6,
+          "title": "App Logs",
+          "type": "logs",
+          "gridPos": {"x":0,"y":16,"w":24,"h":10},
+          "targets": [{
+            "datasource": {"type":"loki","uid":"loki"},
+            "expr": "{namespace=\"default\", app=\"failure-detect\}"
+          }]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.3.1
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin123
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboard-json
+              mountPath: /var/lib/grafana/dashboards
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboard-json
+          configMap:
+            name: grafana-dashboard-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30030
